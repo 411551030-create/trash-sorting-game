@@ -1,0 +1,1684 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>垃圾分類守衛隊：滑動接球大作戰</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800;900&display=swap"
+    rel="stylesheet"
+  />
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Noto Sans TC"', 'sans-serif'],
+          },
+          colors: {
+            creamBg: '#FAF7F0',
+            mintSoft: '#E7F6EC',
+            mintAccent: '#16A34A',
+            forestInk: '#14291E',
+          },
+        },
+      },
+    };
+  </script>
+  <style>
+    html,
+    body {
+      background-color: #FAF7F0;
+      color: #14291E;
+      overscroll-behavior: none;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    @keyframes fadeSlideUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .anim-enter {
+      animation: fadeSlideUp 0.22s ease-out forwards;
+    }
+
+    #gameCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      cursor: grab;
+    }
+
+    #gameCanvas:active {
+      cursor: grabbing;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col bg-creamBg text-forestInk antialiased">
+  <!-- 頂部導覽與即時狀態列 -->
+  <header class="w-full max-w-5xl mx-auto px-3 sm:px-6 pt-3 pb-2 space-y-2">
+    <div class="flex flex-wrap items-center justify-between gap-2 bg-white/90 border border-emerald-900/10 rounded-3xl px-4 py-2.5 shadow-xs">
+      <!-- 遊戲標題與關卡指示 -->
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span class="text-2xl leading-none" aria-hidden="true">♻️</span>
+        <div class="min-w-0">
+          <h1 class="text-sm sm:text-lg font-black tracking-tight text-forestInk truncate">
+            垃圾分類守衛隊：滑動接球大作戰
+          </h1>
+          <p id="stageIndicatorText" class="text-xs font-bold text-emerald-800/80 truncate">
+            第 1 / 3 關 · 日常餐飲（共 9 關）
+          </p>
+        </div>
+      </div>
+
+      <!-- 難度切換器（簡單 / 普通 / 困難）與功能按鈕 -->
+      <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <div id="difficultySelector" class="inline-flex rounded-2xl bg-creamBg p-1 border border-emerald-900/10" role="group" aria-label="選擇難度">
+          <button
+            type="button"
+            data-diff="easy"
+            class="diff-btn px-2.5 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer"
+          >
+            簡單
+          </button>
+          <button
+            type="button"
+            data-diff="normal"
+            class="diff-btn px-2.5 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer"
+          >
+            普通
+          </button>
+          <button
+            type="button"
+            data-diff="hard"
+            class="diff-btn px-2.5 py-1 rounded-xl text-xs font-extrabold transition cursor-pointer"
+          >
+            困難
+          </button>
+        </div>
+
+        <button
+          id="muteBtn"
+          type="button"
+          class="px-3 py-1.5 rounded-2xl bg-mintSoft hover:bg-emerald-200/70 text-emerald-900 text-xs font-extrabold transition cursor-pointer"
+          aria-label="切換音效"
+        >
+          🔊 音效開
+        </button>
+
+        <button
+          id="githubBtn"
+          type="button"
+          class="px-3 py-1.5 rounded-2xl bg-forestInk hover:bg-emerald-950 text-white text-xs font-extrabold transition cursor-pointer"
+        >
+          GitHub 說明
+        </button>
+      </div>
+    </div>
+
+    <!-- 緊湊狀態 HUD：分數、連擊、能量條與愛心 -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 px-1">
+      <div class="bg-white/90 border border-emerald-900/10 rounded-2xl px-3.5 py-2 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-500">分數 / 目標</span>
+        <span id="hudScore" class="text-sm sm:text-base font-black text-forestInk">0 / 400</span>
+      </div>
+
+      <div class="bg-white/90 border border-emerald-900/10 rounded-2xl px-3.5 py-2 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-500">連擊 Combo</span>
+        <span id="hudCombo" class="text-sm sm:text-base font-black text-emerald-700">0 🔥</span>
+      </div>
+
+      <div class="bg-white/90 border border-emerald-900/10 rounded-2xl px-3.5 py-2 flex flex-col justify-center gap-1">
+        <div class="flex items-center justify-between text-[11px] font-extrabold">
+          <span id="hudEnergyLabel" class="text-emerald-800">守衛能量</span>
+          <span id="hudEnergyPct" class="text-emerald-700">0%</span>
+        </div>
+        <div class="w-full h-2 rounded-full bg-emerald-100 overflow-hidden">
+          <div id="hudEnergyBar" class="h-full w-0 rounded-full bg-emerald-600 transition-all duration-150"></div>
+        </div>
+      </div>
+
+      <div class="bg-white/90 border border-emerald-900/10 rounded-2xl px-3.5 py-2 flex items-center justify-between">
+        <span class="text-xs font-bold text-slate-500">生命值</span>
+        <span id="hudLives" class="text-sm sm:text-base font-black tracking-tight">❤️❤️❤️❤️❤️</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- 中央主舞台 -->
+  <main class="flex-1 w-full max-w-5xl mx-auto px-3 sm:px-6 py-2 flex flex-col justify-center gap-2.5">
+    <!-- 單行即時教學解析 Banner -->
+    <div
+      id="educationBanner"
+      class="bg-white/95 border border-emerald-900/10 rounded-2xl px-4 py-2.5 flex items-center justify-between gap-3 shadow-2xs"
+    >
+      <div class="flex items-center gap-2.5 min-w-0">
+        <span id="bannerBadge" class="px-2 py-0.5 rounded-lg bg-mintSoft text-emerald-800 text-xs font-black shrink-0">
+          守衛提示
+        </span>
+        <p id="bannerText" class="text-xs sm:text-sm font-bold text-forestInk truncate">
+          拖曳桶子、點選下方分類桶或點畫布左右側快速移桶；能量滿 100% 啟動「2 倍分＆慢動作精準模式」！
+        </p>
+      </div>
+      <button
+        id="dashActionBtn"
+        type="button"
+        class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-black shrink-0 transition cursor-pointer"
+      >
+        ⚡ 吸物衝刺
+      </button>
+    </div>
+
+    <!-- HTML5 Canvas 掉落接球舞台 -->
+    <div class="relative w-full rounded-3xl overflow-hidden border border-emerald-900/15 bg-white shadow-xs">
+      <canvas id="gameCanvas"></canvas>
+
+      <!-- 關卡結算覆蓋層 -->
+      <div
+        id="stageSummaryOverlay"
+        class="hidden absolute inset-0 z-20 bg-forestInk/45 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5"
+      >
+        <div class="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-6 border border-emerald-100 shadow-xl space-y-4 anim-enter max-h-[92%] overflow-y-auto">
+          <div class="text-center space-y-1">
+            <p id="summaryStatusTag" class="text-xs font-black uppercase tracking-wider text-emerald-700">
+              關卡結算
+            </p>
+            <h2 id="summaryTitle" class="text-xl sm:text-2xl font-black text-forestInk">
+              第 1 關完成！
+            </h2>
+            <p id="summarySubtitle" class="text-xs sm:text-sm font-medium text-slate-600">
+              得分與分類表現整理
+            </p>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5 text-center">
+            <div class="rounded-2xl bg-creamBg p-3 border border-emerald-900/10">
+              <div class="text-[11px] font-bold text-slate-500">本關得分</div>
+              <div id="summaryScore" class="text-lg sm:text-xl font-black text-forestInk mt-0.5">0</div>
+            </div>
+            <div class="rounded-2xl bg-creamBg p-3 border border-emerald-900/10">
+              <div class="text-[11px] font-bold text-slate-500">正確接取</div>
+              <div id="summaryAccuracy" class="text-lg sm:text-xl font-black text-emerald-700 mt-0.5">0/0</div>
+            </div>
+            <div class="rounded-2xl bg-creamBg p-3 border border-emerald-900/10">
+              <div class="text-[11px] font-bold text-slate-500">最高連擊</div>
+              <div id="summaryCombo" class="text-lg sm:text-xl font-black text-teal-700 mt-0.5">0</div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl bg-mintSoft/80 p-3.5 border border-emerald-200/80 space-y-1.5">
+            <div class="text-xs font-black text-emerald-950">本關回收重點筆記</div>
+            <ul id="summaryTakeaways" class="space-y-1 text-xs sm:text-sm text-forestInk/90"></ul>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-center gap-2 pt-1">
+            <button
+              id="replayStageBtn"
+              type="button"
+              class="px-4 py-2.5 rounded-2xl bg-white hover:bg-creamBg text-forestInk border border-emerald-900/15 text-xs sm:text-sm font-extrabold transition cursor-pointer"
+            >
+              重玩本關
+            </button>
+            <button
+              id="switchDiffBtn"
+              type="button"
+              class="px-4 py-2.5 rounded-2xl bg-mintSoft hover:bg-emerald-200/70 text-emerald-950 text-xs sm:text-sm font-extrabold transition cursor-pointer"
+            >
+              切換難度
+            </button>
+            <button
+              id="nextStageBtn"
+              type="button"
+              class="px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-black transition cursor-pointer"
+            >
+              下一關 →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下方分類桶快捷按鈕列（支援直接點選切換/接取，平板觸控友善） -->
+    <div id="bucketButtonsBar" class="grid grid-cols-3 sm:grid-cols-4 gap-2"></div>
+  </main>
+
+  <!-- GitHub Pages 上傳與 README 說明彈窗 -->
+  <div
+    id="githubModal"
+    class="fixed inset-0 z-50 hidden items-center justify-center bg-forestInk/50 backdrop-blur-xs p-4"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="githubModalTitle"
+  >
+    <div class="bg-white rounded-3xl max-w-2xl w-full p-5 sm:p-6 border border-emerald-100 shadow-2xl space-y-4 anim-enter max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between gap-2">
+        <h2 id="githubModalTitle" class="text-base sm:text-lg font-black text-forestInk">
+          部署到 GitHub Pages 步驟與 README.md
+        </h2>
+        <button
+          id="closeGithubBtn"
+          type="button"
+          class="w-9 h-9 rounded-full bg-creamBg hover:bg-emerald-100 text-forestInk font-black text-sm cursor-pointer"
+          aria-label="關閉視窗"
+        >
+          ✕
+        </button>
+      </div>
+
+      <ol class="list-decimal list-inside text-xs sm:text-sm text-slate-700 space-y-1.5 leading-relaxed">
+        <li>建立新的公開 GitHub Repository，將本檔案存為 <code class="px-1.5 py-0.5 rounded bg-mintSoft text-emerald-950 font-mono">index.html</code> 並上傳至儲存庫根目錄。</li>
+        <li>將下方提供的 <code class="px-1.5 py-0.5 rounded bg-mintSoft text-emerald-950 font-mono">README.md</code> 範本存檔並一併上傳（可點選「一鍵複製 README」）。</li>
+        <li>前往專案的 <strong>Settings → Pages</strong>，在 <strong>Branch</strong> 選擇 <code class="px-1.5 py-0.5 rounded bg-mintSoft text-emerald-950 font-mono">main</code> 與 <code class="px-1.5 py-0.5 rounded bg-mintSoft text-emerald-950 font-mono">/ (root)</code> 後按 <strong>Save</strong>。</li>
+        <li>等候約 1 分鐘即可透過 <code class="px-1.5 py-0.5 rounded bg-mintSoft text-emerald-950 font-mono">https://&lt;帳號&gt;.github.io/&lt;儲存庫名稱&gt;/</code> 在電腦或平板上直接遊玩。</li>
+      </ol>
+
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-black text-emerald-900">README.md 範本</span>
+          <button
+            id="copyReadmeBtn"
+            type="button"
+            class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition cursor-pointer"
+          >
+            一鍵複製 README
+          </button>
+        </div>
+        <textarea
+          id="readmeTemplateBox"
+          readonly
+          rows="9"
+          class="w-full rounded-2xl bg-slate-900 text-emerald-50 font-mono text-xs p-3.5 leading-relaxed"
+        ></textarea>
+        <p id="copyStatusText" class="text-xs font-extrabold text-emerald-700 h-4"></p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * =========================================================================
+     * 《垃圾分類守衛隊：滑動接球大作戰》
+     * 單檔 HTML5 Canvas 環保分類街機教學遊戲（支援 GitHub Pages）
+     * =========================================================================
+     */
+
+    // -------------------------------------------------------------------------
+    // 1. 分類桶定義
+    // -------------------------------------------------------------------------
+    const BUCKETS = {
+      general: {
+        id: 'general',
+        name: '一般垃圾',
+        icon: '🗑️',
+        tip: '沾油污漬／複合材質',
+        accent: '#64748B',
+        fill: '#F1F5F9',
+        border: '#94A3B8',
+        text: '#1E293B',
+        btnClass: 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800',
+        activeBtnClass: 'bg-slate-200/90 border-slate-700 text-slate-950 ring-2 ring-slate-500/30',
+      },
+      recycle: {
+        id: 'recycle',
+        name: '資源回收',
+        icon: '♻️',
+        tip: '沖洗乾淨／可再生材質',
+        accent: '#16A34A',
+        fill: '#DCFCE7',
+        border: '#22C55E',
+        text: '#14532D',
+        btnClass: 'bg-white hover:bg-emerald-50 border-emerald-300 text-emerald-950',
+        activeBtnClass: 'bg-emerald-100 border-emerald-700 text-emerald-950 ring-2 ring-emerald-500/30',
+      },
+      compost: {
+        id: 'compost',
+        name: '廚餘',
+        icon: '🥬',
+        tip: '天然蔬果／瀝乾殘渣',
+        accent: '#65A30D',
+        fill: '#ECFCCB',
+        border: '#84CC16',
+        text: '#365314',
+        btnClass: 'bg-white hover:bg-lime-50 border-lime-300 text-lime-950',
+        activeBtnClass: 'bg-lime-100 border-lime-700 text-lime-950 ring-2 ring-lime-500/30',
+      },
+      special: {
+        id: 'special',
+        name: '特殊回收',
+        icon: '🔋',
+        tip: '電池／燈管／化學容器',
+        accent: '#D97706',
+        fill: '#FEF3C7',
+        border: '#F59E0B',
+        text: '#78350F',
+        btnClass: 'bg-white hover:bg-amber-50 border-amber-300 text-amber-950',
+        activeBtnClass: 'bg-amber-100 border-amber-700 text-amber-950 ring-2 ring-amber-500/30',
+      },
+    };
+
+    // -------------------------------------------------------------------------
+    // 2. Web Audio 合成音效模組（安全處理 AudioContext 限制與靜音）
+    // -------------------------------------------------------------------------
+    const soundEngine = {
+      ctx: null,
+      muted: false,
+
+      unlock() {
+        if (this.muted) return null;
+        try {
+          if (!this.ctx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return null;
+            this.ctx = new AudioContextClass();
+          }
+          if (this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {});
+          }
+          return this.ctx;
+        } catch (err) {
+          return null;
+        }
+      },
+
+      tone(freq, duration = 0.12, type = 'sine', volume = 0.12, delay = 0, endFreq = null) {
+        if (this.muted) return;
+        const ctx = this.unlock();
+        if (!ctx) return;
+
+        try {
+          const startAt = ctx.currentTime + delay;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, startAt);
+          if (endFreq) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(40, endFreq), startAt + duration);
+          }
+
+          gain.gain.setValueAtTime(0.0001, startAt);
+          gain.gain.linearRampToValueAtTime(volume, startAt + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(startAt);
+          osc.stop(startAt + duration + 0.02);
+        } catch (err) {
+          // 忽略受限裝置上的音效例外
+        }
+      },
+
+      catchCorrect(combo = 1) {
+        const semi = Math.min(combo - 1, 8);
+        const f = 440 * Math.pow(1.059463, semi);
+        this.tone(f, 0.11, 'triangle', 0.12, 0, f * 1.25);
+        this.tone(f * 1.5, 0.11, 'sine', 0.07, 0.05);
+      },
+
+      powerActivate() {
+        [523.25, 659.25, 783.99, 1046.5].forEach((n, idx) => {
+          this.tone(n, 0.15, 'triangle', 0.13, idx * 0.06);
+        });
+      },
+
+      dashBoost() {
+        this.tone(240, 0.12, 'sawtooth', 0.07, 0, 580);
+      },
+
+      bucketSwitch() {
+        this.tone(360, 0.05, 'sine', 0.05);
+      },
+
+      wrongOrMiss() {
+        this.tone(210, 0.16, 'sawtooth', 0.09, 0, 125);
+        this.tone(150, 0.2, 'square', 0.06, 0.1, 100);
+      },
+
+      stageComplete(passed) {
+        if (passed) {
+          [523.25, 659.25, 783.99, 1046.5].forEach((n, i) => {
+            this.tone(n, 0.2, 'triangle', 0.13, i * 0.08);
+          });
+        } else {
+          this.tone(320, 0.2, 'triangle', 0.09, 0, 190);
+          this.tone(190, 0.25, 'triangle', 0.09, 0.16, 130);
+        }
+      },
+    };
+
+    // -------------------------------------------------------------------------
+    // 3. 三種難度 × 每難度 3 關（共 9 關）完整題庫與教學解析
+    // -------------------------------------------------------------------------
+    const DIFFICULTY_CONFIG = {
+      easy: {
+        key: 'easy',
+        label: '簡單',
+        fallSpeed: 102,
+        spawnInterval: 1.95,
+        lives: 5,
+        buckets: ['general', 'recycle', 'compost'],
+        stages: [
+          {
+            title: '日常餐飲',
+            targetScore: 350,
+            quota: 7,
+            takeaways: [
+              '喝完倒空並簡單沖洗的寶特瓶、鋁罐屬於「資源回收」。',
+              '天然果皮與菜葉可歸入「廚餘」；用過且已受污染的衛生紙則丟「一般垃圾」。',
+              '接物籃顏色會隨所在分類桶切換，對準正確桶子接住才能加分與累積連擊！',
+            ],
+            items: [
+              { name: '寶特瓶', icon: '🧴', badge: '沖淨壓扁', answer: 'recycle', reason: '乾淨寶特瓶屬 PET 塑膠，清洗後放「資源回收」可循環再製。' },
+              { name: '香蕉皮', icon: '🍌', badge: '天然果皮', answer: 'compost', reason: '香蕉皮是天然有機物，可歸入「廚餘」進行堆肥。' },
+              { name: '用過衛生紙', icon: '🧻', badge: '已擦拭', answer: 'general', reason: '用過的衛生紙已受污染且纖維短，無法再造紙，應丟「一般垃圾」。' },
+              { name: '鋁罐飲料罐', icon: '🥫', badge: '倒空沖淨', answer: 'recycle', reason: '鋁罐回收再生效益高，倒空洗淨後歸入「資源回收」。' },
+              { name: '蘋果核', icon: '🍎', badge: '果核殘渣', answer: 'compost', reason: '蘋果核為天然植物殘渣，可歸入「廚餘」處理。' },
+              { name: '沾油餐巾紙', icon: '🍽️', badge: '吸了油脂', answer: 'general', reason: '沾有油脂的餐巾紙會影響紙漿回收，應丟「一般垃圾」。' },
+              { name: '玻璃飲料瓶', icon: '🫙', badge: '沖洗乾淨', answer: 'recycle', reason: '玻璃容器洗淨後可反覆熔製再利用，歸入「資源回收」。' },
+            ],
+          },
+          {
+            title: '居家包裝',
+            targetScore: 450,
+            quota: 8,
+            takeaways: [
+              '乾淨紙箱與牛奶紙盒需拆平或洗淨晾乾後再進「資源回收」。',
+              '破雨傘骨架或沾油塑膠袋因難拆解或油污，多歸入「一般垃圾」。',
+              '善用「⚡ 吸物衝刺」可在物品偏遠時快速移桶並擴大接取範圍！',
+            ],
+            items: [
+              { name: '乾淨紙箱', icon: '📦', badge: '拆平去膠帶', answer: 'recycle', reason: '乾淨紙箱拆平、去除膠帶後是良好的紙類「資源回收」。' },
+              { name: '牛奶紙盒', icon: '🥛', badge: '沖洗晾乾', answer: 'recycle', reason: '牛奶紙盒沖洗乾淨後可納入「資源回收」循環處理。' },
+              { name: '蛋殼', icon: '🥚', badge: '天然蛋殼', answer: 'compost', reason: '蛋殼屬於有機物，可依在地廚餘規範歸入「廚餘」。' },
+              { name: '破雨傘骨架', icon: '☂️', badge: '多材質損壞', answer: 'general', reason: '傘布與金屬骨架難以拆解回收，一般歸入「一般垃圾」。' },
+              { name: '茶葉渣', icon: '🍵', badge: '植物殘渣', answer: 'compost', reason: '茶葉渣是天然植物殘渣，歸入「廚餘」即可。' },
+              { name: '洗淨鐵罐頭', icon: '🥫', badge: '洗淨無殘留', answer: 'recycle', reason: '清洗乾淨的鐵罐屬於金屬容器，歸入「資源回收」。' },
+              { name: '髒污塑膠袋', icon: '🛍️', badge: '難洗淨油漬', answer: 'general', reason: '沾染油汙且難洗淨的塑膠袋會污染回收料，應丟「一般垃圾」。' },
+              { name: '玉米芯', icon: '🌽', badge: '植物殘渣', answer: 'compost', reason: '玉米芯屬於植物性殘渣，可歸入「廚餘」處理。' },
+            ],
+          },
+          {
+            title: '常見陷阱',
+            targetScore: 550,
+            quota: 9,
+            takeaways: [
+              '沾滿起司與油脂的披薩盒無法順利製漿回收，應丟「一般垃圾」。',
+              '塑膠吸管細小難分選、洋芋片袋為複合材質，皆屬「一般垃圾」；乾淨保麗龍可「資源回收」。',
+              '能量滿 100% 啟動「2 倍分＆慢動作精準模式」，把握時機衝高分！',
+            ],
+            items: [
+              { name: '油漬披薩盒', icon: '🍕', badge: '起司油汙', answer: 'general', reason: '嚴重沾油的披薩盒無法順利製漿回收，應丟「一般垃圾」。' },
+              { name: '沖淨塑膠杯', icon: '🥤', badge: '已洗淨', answer: 'recycle', reason: '沖洗乾淨並去除液體的塑膠飲料杯可歸入「資源回收」。' },
+              { name: '洋蔥皮菜葉', icon: '🧅', badge: '蔬果邊角', answer: 'compost', reason: '天然蔬果切剩的邊角料可歸入「廚餘」處理。' },
+              { name: '塑膠吸管', icon: '🥢', badge: '細小難分選', answer: 'general', reason: '塑膠吸管體積小且材質不易分選，建議減量並丟「一般垃圾」。' },
+              { name: '乾淨保麗龍箱', icon: '📦', badge: '乾淨無油汙', answer: 'recycle', reason: '乾淨、無油汙且未碎裂的保麗龍可歸入「資源回收」（依地方規定）。' },
+              { name: '熟麵條湯渣', icon: '🍜', badge: '已瀝乾', answer: 'compost', reason: '瀝乾湯汁的熟食殘渣可歸入「廚餘」（依當地廚餘規定）。' },
+              { name: '洋芋片鋁箔袋', icon: '🛍️', badge: '複合材質', answer: 'general', reason: '零食袋多為塑膠與金屬複合材質且含油，不易回收，歸「一般垃圾」。' },
+              { name: '洗淨玻璃瓶', icon: '🫙', badge: '乾淨瓶身', answer: 'recycle', reason: '洗淨的玻璃瓶可進入「資源回收」循環再製。' },
+              { name: '香蕉皮', icon: '🍌', badge: '天然果皮', answer: 'compost', reason: '香蕉皮歸入「廚餘」進行堆肥處理。' },
+            ],
+          },
+        ],
+      },
+
+      normal: {
+        key: 'normal',
+        label: '普通',
+        fallSpeed: 142,
+        spawnInterval: 1.55,
+        lives: 4,
+        buckets: ['general', 'recycle', 'compost', 'special'],
+        stages: [
+          {
+            title: '日常餐飲',
+            targetScore: 600,
+            quota: 9,
+            takeaways: [
+              '乾電池、行動電源含有重金屬或電池物質，必須交由「特殊回收」。',
+              '油漬披薩盒與沒喝完的含液飲料不可直接丟回收，液體需先倒除。',
+              '熟食殘渣需瀝乾水分後再依在地規定歸入「廚餘」。',
+            ],
+            items: [
+              { name: '油漬披薩盒', icon: '🍕', badge: '起司油汙', answer: 'general', reason: '沾滿油脂的披薩盒無法製漿回收，應丟「一般垃圾」。' },
+              { name: '乾電池', icon: '🔋', badge: '含重金屬', answer: 'special', reason: '乾電池含重金屬，應交由「特殊回收」妥善處理。' },
+              { name: '沖淨塑膠杯', icon: '🥤', badge: '已洗淨', answer: 'recycle', reason: '清洗乾淨的塑膠杯可歸入「資源回收」。' },
+              { name: '熟食米飯菜渣', icon: '🍚', badge: '已瀝乾', answer: 'compost', reason: '無毒且未變質的食物殘渣可歸入「廚餘」。' },
+              { name: '沒喝完珍奶', icon: '🧋', badge: '含液體', answer: 'general', reason: '液體應先倒除、杯與料分開處理，不可整杯直接丟回收。' },
+              { name: '鋁罐飲料罐', icon: '🥫', badge: '倒空沖淨', answer: 'recycle', reason: '鋁罐倒空洗淨後放「資源回收」。' },
+              { name: '蘋果核', icon: '🍎', badge: '果核殘渣', answer: 'compost', reason: '天然果核歸入「廚餘」處理。' },
+              { name: '行動電源', icon: '🔌', badge: '鋰電池', answer: 'special', reason: '行動電源屬「特殊回收」，切勿隨意丟一般垃圾以免起火。' },
+              { name: '用過衛生紙', icon: '🧻', badge: '已使用', answer: 'general', reason: '使用過的衛生紙已受污染，應丟「一般垃圾」。' },
+            ],
+          },
+          {
+            title: '居家包裝',
+            targetScore: 700,
+            quota: 10,
+            takeaways: [
+              '廢棄日光燈管與鈕扣電池皆屬「特殊回收」，燈管應避免打破。',
+              '乾淨紙箱、洗淨鐵罐與牛奶紙盒為「資源回收」；複合鋁箔袋與塑膠吸管屬「一般垃圾」。',
+              '平板上可直接點下方分類桶切換，或點畫布左右側快速把桶移過去！',
+            ],
+            items: [
+              { name: '廢棄日光燈管', icon: '💡', badge: '含微量汞', answer: 'special', reason: '燈管含汞等有害物質，需小心交給「特殊回收」，避免打破。' },
+              { name: '乾淨紙箱', icon: '📦', badge: '拆平去膠帶', answer: 'recycle', reason: '乾淨紙箱折疊整齊放「資源回收」。' },
+              { name: '洋芋片鋁箔袋', icon: '🛍️', badge: '複合材質', answer: 'general', reason: '鋁箔與塑膠複合包裝不易分離回收，歸入「一般垃圾」。' },
+              { name: '茶葉渣', icon: '🍵', badge: '植物殘渣', answer: 'compost', reason: '茶葉渣歸入「廚餘」處理。' },
+              { name: '洗淨鐵罐頭', icon: '🥫', badge: '洗淨無殘留', answer: 'recycle', reason: '清洗乾淨的鐵罐歸入「資源回收」。' },
+              { name: '鈕扣型電池', icon: '🪙', badge: '含重金屬', answer: 'special', reason: '鈕扣電池屬於電池類，應放「特殊回收」。' },
+              { name: '塑膠吸管', icon: '🥢', badge: '細小難分選', answer: 'general', reason: '多數地區塑膠吸管建議減量使用並丟「一般垃圾」。' },
+              { name: '蛋殼', icon: '🥚', badge: '天然蛋殼', answer: 'compost', reason: '蛋殼可依在地廚餘規範歸入「廚餘」。' },
+              { name: '牛奶紙盒', icon: '🥛', badge: '沖洗晾乾', answer: 'recycle', reason: '牛奶紙盒清洗乾淨後可納入「資源回收」。' },
+              { name: '破雨傘骨架', icon: '☂️', badge: '多材質損壞', answer: 'general', reason: '損壞且多材質混合的雨傘一般歸入「一般垃圾」。' },
+            ],
+          },
+          {
+            title: '常見陷阱',
+            targetScore: 800,
+            quota: 10,
+            takeaways: [
+              '乾淨無油汙的保麗龍可「資源回收」，但沾油碎保麗龍應丟「一般垃圾」。',
+              '大骨頭、熱感應紙發票與發霉腐敗剩菜多歸入「一般垃圾」。',
+              '農藥殺蟲劑罐與含汞溫度計具危害風險，需交由「特殊回收」。',
+            ],
+            items: [
+              { name: '乾淨保麗龍箱', icon: '📦', badge: '乾淨無油汙', answer: 'recycle', reason: '乾淨無油汙且未碎裂的保麗龍可歸入「資源回收」（依地方規定）。' },
+              { name: '沾油碎保麗龍', icon: '🧊', badge: '油汙且碎裂', answer: 'general', reason: '沾染油汙或碎裂難收集的保麗龍失去回收價值，歸「一般垃圾」。' },
+              { name: '大骨頭', icon: '🦴', badge: '堅硬骨頭', answer: 'general', reason: '粗大堅硬的骨頭不易腐化且易損壞設備，多數地區丟「一般垃圾」。' },
+              { name: '農藥殺蟲劑罐', icon: '🧴', badge: '化學藥劑', answer: 'special', reason: '殺蟲劑等化學藥劑容器具危害風險，應依「特殊回收」處理。' },
+              { name: '熱感應紙發票', icon: '🧾', badge: '感熱塗層', answer: 'general', reason: '熱感應紙含化學塗層，容易影響紙類回收，通常歸「一般垃圾」。' },
+              { name: '果皮與菜葉', icon: '🥬', badge: '新鮮蔬果', answer: 'compost', reason: '乾淨蔬果殘渣可歸入「廚餘」堆肥循環。' },
+              { name: '含汞溫度計', icon: '🌡️', badge: '含汞物品', answer: 'special', reason: '含汞物品屬於「特殊回收」，需妥善交由回收體系。' },
+              { name: '洗淨玻璃瓶', icon: '🫙', badge: '乾淨瓶身', answer: 'recycle', reason: '洗淨的玻璃瓶歸入「資源回收」。' },
+              { name: '發霉腐敗剩菜', icon: '🦠', badge: '已腐敗發霉', answer: 'general', reason: '已腐敗發霉的食物不適合再利用或堆肥，應包好丟「一般垃圾」。' },
+              { name: '香蕉皮', icon: '🍌', badge: '天然果皮', answer: 'compost', reason: '香蕉皮歸入「廚餘」處理。' },
+            ],
+          },
+        ],
+      },
+
+      hard: {
+        key: 'hard',
+        label: '困難',
+        fallSpeed: 184,
+        spawnInterval: 1.28,
+        lives: 3,
+        buckets: ['general', 'recycle', 'compost', 'special'],
+        stages: [
+          {
+            title: '日常餐飲',
+            targetScore: 750,
+            quota: 10,
+            takeaways: [
+              '高節奏下更要看清「油漬披薩盒、大骨頭、沒喝完珍奶」皆屬「一般垃圾」。',
+              '乾電池與行動電源務必放「特殊回收」，切勿混入一般垃圾。',
+              '熟食殘渣需瀝乾水分再歸入「廚餘」，乾淨容器清洗後才進「資源回收」。',
+            ],
+            items: [
+              { name: '油漬披薩盒', icon: '🍕', badge: '起司油汙', answer: 'general', reason: '沾滿油脂的披薩盒無法製漿回收，應丟「一般垃圾」。' },
+              { name: '大骨頭', icon: '🦴', badge: '堅硬骨頭', answer: 'general', reason: '粗大堅硬的骨頭不易腐化且易損壞設備，多數地區丟「一般垃圾」。' },
+              { name: '乾電池', icon: '🔋', badge: '含重金屬', answer: 'special', reason: '乾電池含重金屬，應交由「特殊回收」處理。' },
+              { name: '沒喝完珍奶', icon: '🧋', badge: '含液體', answer: 'general', reason: '液體應先倒除、杯與料分開處理，不可整杯直接丟回收。' },
+              { name: '熟麵條湯渣', icon: '🍜', badge: '已瀝乾', answer: 'compost', reason: '瀝乾湯汁的熟食殘渣可歸入「廚餘」。' },
+              { name: '沖淨塑膠杯', icon: '🥤', badge: '已洗淨', answer: 'recycle', reason: '清洗乾淨的塑膠杯可歸入「資源回收」。' },
+              { name: '行動電源', icon: '🔌', badge: '鋰電池', answer: 'special', reason: '行動電源屬「特殊回收」，切勿丟一般垃圾。' },
+              { name: '果皮與菜葉', icon: '🥬', badge: '新鮮蔬果', answer: 'compost', reason: '乾淨蔬果殘渣可歸入「廚餘」。' },
+              { name: '鋁罐飲料罐', icon: '🥫', badge: '倒空沖淨', answer: 'recycle', reason: '鋁罐倒空洗淨後放「資源回收」。' },
+              { name: '沾油餐巾紙', icon: '🍽️', badge: '吸了油脂', answer: 'general', reason: '沾油餐巾紙影響紙漿回收，應丟「一般垃圾」。' },
+            ],
+          },
+          {
+            title: '居家包裝',
+            targetScore: 900,
+            quota: 11,
+            takeaways: [
+              '複合鋁箔袋、塑膠包金屬衣架與熱感應紙發票多屬「一般垃圾」。',
+              '乾淨無油汙的保麗龍箱可「資源回收」，沾油碎保麗龍則丟「一般垃圾」。',
+              '日光燈管、鈕扣電池與化學藥劑空罐皆屬「特殊回收」。',
+            ],
+            items: [
+              { name: '乾淨保麗龍箱', icon: '📦', badge: '乾淨無油汙', answer: 'recycle', reason: '乾淨無油汙且未碎裂的保麗龍可歸入「資源回收」（依地方規定）。' },
+              { name: '沾油碎保麗龍', icon: '🧊', badge: '油汙且碎裂', answer: 'general', reason: '沾染油汙或碎裂難收集的保麗龍失去回收價值，歸「一般垃圾」。' },
+              { name: '洋芋片鋁箔袋', icon: '🛍️', badge: '複合材質', answer: 'general', reason: '鋁箔與塑膠複合袋不易分離回收，歸入「一般垃圾」。' },
+              { name: '廢棄日光燈管', icon: '💡', badge: '含微量汞', answer: 'special', reason: '燈管含汞，需小心交給「特殊回收」，避免打破。' },
+              { name: '塑膠鐵絲衣架', icon: '🪝', badge: '塑膠包金屬', answer: 'general', reason: '塑膠包覆金屬的衣架不易拆解分選，一般歸「一般垃圾」。' },
+              { name: '農藥殺蟲劑罐', icon: '🧴', badge: '化學藥劑', answer: 'special', reason: '化學藥劑容器具危害風險，應依「特殊回收」處理。' },
+              { name: '乾淨紙箱', icon: '📦', badge: '拆平去膠帶', answer: 'recycle', reason: '乾淨紙箱拆平、去膠帶後放「資源回收」。' },
+              { name: '鈕扣型電池', icon: '🪙', badge: '含重金屬', answer: 'special', reason: '鈕扣電池屬於電池類，應放「特殊回收」。' },
+              { name: '茶葉渣', icon: '🍵', badge: '植物殘渣', answer: 'compost', reason: '茶葉渣歸入「廚餘」。' },
+              { name: '熱感應紙發票', icon: '🧾', badge: '感熱塗層', answer: 'general', reason: '熱感應紙含化學顯影塗層，通常歸「一般垃圾」。' },
+              { name: '洗淨玻璃瓶', icon: '🫙', badge: '乾淨瓶身', answer: 'recycle', reason: '洗淨的玻璃瓶歸入「資源回收」。' },
+            ],
+          },
+          {
+            title: '常見陷阱',
+            targetScore: 1050,
+            quota: 12,
+            takeaways: [
+              '含汞溫度計、乾電池與行動電源務必交由「特殊回收」。',
+              '發霉剩菜、油漬披薩盒、大骨頭、塑膠吸管與複合袋皆屬「一般垃圾」。',
+              '維持高連擊啟動「2 倍分＆慢動作精準模式」，是困難關卡達標的關鍵！',
+            ],
+            items: [
+              { name: '含汞溫度計', icon: '🌡️', badge: '含汞物品', answer: 'special', reason: '含汞物品屬於「特殊回收」，需妥善交由回收體系。' },
+              { name: '發霉腐敗剩菜', icon: '🦠', badge: '已腐敗發霉', answer: 'general', reason: '已腐敗發霉的食物不適合堆肥或再利用，應丟「一般垃圾」。' },
+              { name: '乾淨保麗龍箱', icon: '📦', badge: '乾淨無油汙', answer: 'recycle', reason: '乾淨無油汙且未碎裂的保麗龍可歸入「資源回收」（依地方規定）。' },
+              { name: '塑膠吸管', icon: '🥢', badge: '細小難分選', answer: 'general', reason: '多數地區塑膠吸管建議減量使用並丟「一般垃圾」。' },
+              { name: '乾電池', icon: '🔋', badge: '含重金屬', answer: 'special', reason: '乾電池含重金屬，應交由「特殊回收」。' },
+              { name: '大骨頭', icon: '🦴', badge: '堅硬骨頭', answer: 'general', reason: '粗大堅硬的骨頭不易腐化，多數地區丟「一般垃圾」。' },
+              { name: '香蕉皮', icon: '🍌', badge: '天然果皮', answer: 'compost', reason: '香蕉皮歸入「廚餘」處理。' },
+              { name: '油漬披薩盒', icon: '🍕', badge: '起司油汙', answer: 'general', reason: '沾滿油脂的披薩盒無法製漿回收，應丟「一般垃圾」。' },
+              { name: '行動電源', icon: '🔌', badge: '鋰電池', answer: 'special', reason: '行動電源屬「特殊回收」，切勿丟一般垃圾。' },
+              { name: '牛奶紙盒', icon: '🥛', badge: '沖洗晾乾', answer: 'recycle', reason: '牛奶紙盒清洗乾淨後可納入「資源回收」。' },
+              { name: '熟食米飯菜渣', icon: '🍚', badge: '已瀝乾', answer: 'compost', reason: '瀝乾水分的熟食殘渣可歸入「廚餘」。' },
+              { name: '洋芋片鋁箔袋', icon: '🛍️', badge: '複合材質', answer: 'general', reason: '複合材質零食袋不易回收，歸入「一般垃圾」。' },
+            ],
+          },
+        ],
+      },
+    };
+
+    // -------------------------------------------------------------------------
+    // 4. 遊戲狀態與實體容器
+    // -------------------------------------------------------------------------
+    const state = {
+      difficulty: 'easy',
+      stageIndex: 0,
+      phase: 'playing', // 'playing' | 'summary'
+      score: 0,
+      combo: 0,
+      maxCombo: 0,
+      energy: 0, // 0 ~ 100
+      powerTimer: 0, // 2倍分＆慢動作精準模式剩餘秒數
+      dashTimer: 0, // 吸物衝刺剩餘秒數
+      dashCooldown: 0, // 衝刺冷卻秒數
+      lives: 5,
+      maxLives: 5,
+      caughtTotal: 0,
+      correctTotal: 0,
+      spawnedCount: 0,
+      spawnTimer: 0.4,
+      queue: [],
+      fallingItems: [],
+      particles: [],
+      popups: [],
+      basketX: 0.5, // 0.08 ~ 0.92 相對畫布寬度
+      activeBucketIdx: 0,
+      isDragging: false,
+      keys: {
+        left: false,
+        right: false,
+      },
+      rafId: null,
+      lastTime: 0,
+    };
+
+    let canvas = null;
+    let ctx = null;
+    let stageWidth = 800;
+    let stageHeight = 460;
+
+    function getDiffConfig() {
+      return DIFFICULTY_CONFIG[state.difficulty];
+    }
+
+    function getStageConfig() {
+      return getDiffConfig().stages[state.stageIndex];
+    }
+
+    function getStageBuckets() {
+      return getDiffConfig().buckets;
+    }
+
+    function isTouchOrTabletViewport() {
+      const hasTouch = navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
+      return hasTouch || window.innerWidth <= 1024;
+    }
+
+    // -------------------------------------------------------------------------
+    // 5. 關卡初始化與題目佇列建立
+    // -------------------------------------------------------------------------
+    function buildQueue(stage) {
+      const result = [];
+      while (result.length < stage.quota) {
+        const shuffled = [...stage.items];
+        for (let i = shuffled.length - 1; i > 0; i -= 1) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+        }
+        for (const item of shuffled) {
+          if (result.length < stage.quota) {
+            result.push({ ...item });
+          }
+        }
+      }
+      return result;
+    }
+
+    function setEducationBanner(badgeText, message, mode = 'neutral') {
+      const badge = document.getElementById('bannerBadge');
+      const text = document.getElementById('bannerText');
+      if (!badge || !text) return;
+
+      badge.textContent = badgeText;
+      text.textContent = message;
+
+      badge.className = 'px-2 py-0.5 rounded-lg text-xs font-black shrink-0 ';
+      if (mode === 'good') {
+        badge.className += 'bg-emerald-100 text-emerald-800';
+      } else if (mode === 'warn') {
+        badge.className += 'bg-amber-100 text-amber-800';
+      } else {
+        badge.className += 'bg-mintSoft text-emerald-800';
+      }
+    }
+
+    function startStage(diffKey, stageIdx = 0) {
+      stopLoop();
+      const diff = DIFFICULTY_CONFIG[diffKey];
+      const clampedIdx = Math.max(0, Math.min(diff.stages.length - 1, stageIdx));
+      const stage = diff.stages[clampedIdx];
+
+      state.difficulty = diffKey;
+      state.stageIndex = clampedIdx;
+      state.phase = 'playing';
+      state.score = 0;
+      state.combo = 0;
+      state.maxCombo = 0;
+      state.energy = 0;
+      state.powerTimer = 0;
+      state.dashTimer = 0;
+      state.dashCooldown = 0;
+      state.maxLives = diff.lives;
+      state.lives = diff.lives;
+      state.caughtTotal = 0;
+      state.correctTotal = 0;
+      state.spawnedCount = 0;
+      state.spawnTimer = 0.35;
+      state.queue = buildQueue(stage);
+      state.fallingItems = [];
+      state.particles = [];
+      state.popups = [];
+      state.basketX = 0.5;
+      state.activeBucketIdx = 0;
+      state.isDragging = false;
+
+      document.getElementById('stageSummaryOverlay').classList.add('hidden');
+      syncDifficultyButtons();
+      renderBucketButtons();
+      updateHud();
+      setEducationBanner(
+        `第 ${clampedIdx + 1} 關 · ${stage.title}`,
+        `目標 ${stage.targetScore} 分：拖曳接物桶、點選下方分類桶或點畫布左右側快速移桶！`,
+        'neutral'
+      );
+
+      resizeCanvas();
+      startLoop();
+    }
+
+    // -------------------------------------------------------------------------
+    // 6. 操作控制（拖曳、點畫布左右側、點下方桶、鍵盤與吸物衝刺）
+    // -------------------------------------------------------------------------
+    function moveBasketToRatio(ratio) {
+      const clamped = Math.max(0.08, Math.min(0.92, ratio));
+      state.basketX = clamped;
+      const buckets = getStageBuckets();
+      const idx = Math.min(buckets.length - 1, Math.max(0, Math.floor(clamped * buckets.length)));
+      if (idx !== state.activeBucketIdx) {
+        state.activeBucketIdx = idx;
+        highlightActiveBucketButton();
+      }
+    }
+
+    function selectBucketByIndex(idx) {
+      const buckets = getStageBuckets();
+      if (!buckets.length) return;
+      const safeIdx = ((idx % buckets.length) + buckets.length) % buckets.length;
+      state.activeBucketIdx = safeIdx;
+      state.basketX = (safeIdx + 0.5) / buckets.length;
+      highlightActiveBucketButton();
+      soundEngine.bucketSwitch();
+    }
+
+    function triggerDash() {
+      if (state.phase !== 'playing') return;
+      if (state.dashCooldown > 0 || state.dashTimer > 0) return;
+
+      state.dashTimer = 0.7;
+      state.dashCooldown = 2.2;
+      soundEngine.dashBoost();
+      addPopup(state.basketX * stageWidth, stageHeight - 92, '⚡ 吸物衝刺！', '#0F766E');
+      setEducationBanner('吸物衝刺', '700ms 內擴大接取範圍並輕微吸靠附近物品！', 'good');
+      updateHud();
+    }
+
+    // -------------------------------------------------------------------------
+    // 7. 掉落物品、接取判定、連擊能量與特效
+    // -------------------------------------------------------------------------
+    function spawnItem() {
+      const stage = getStageConfig();
+      if (state.spawnedCount >= stage.quota) return;
+
+      const template = state.queue[state.spawnedCount];
+      state.spawnedCount += 1;
+
+      const margin = 0.14;
+      const anchor = margin + Math.random() * (1 - margin * 2);
+
+      state.fallingItems.push({
+        id: state.spawnedCount,
+        ...template,
+        xRatio: anchor,
+        anchor,
+        swayAmp: 0.02 + Math.random() * 0.025,
+        swayFreq: 2.0 + Math.random() * 1.2,
+        swayPhase: Math.random() * Math.PI * 2,
+        y: -44,
+        age: 0,
+      });
+    }
+
+    function addParticles(x, y, color, count = 12) {
+      for (let i = 0; i < count; i += 1) {
+        const angle = (Math.PI * 2 * i) / count + (Math.random() - 0.5) * 0.35;
+        const speed = 65 + Math.random() * 145;
+        state.particles.push({
+          x,
+          y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed - 35,
+          radius: 3 + Math.random() * 3.5,
+          color,
+          life: 0.45 + Math.random() * 0.2,
+          maxLife: 0.65,
+        });
+      }
+    }
+
+    function addPopup(x, y, text, color) {
+      state.popups.push({
+        x,
+        y,
+        text,
+        color,
+        vy: -52,
+        life: 0.9,
+        maxLife: 0.9,
+      });
+    }
+
+    function handleCatchItem(item, chosenBucketId) {
+      const isRightBucket = chosenBucketId === item.answer;
+      const px = item.xRatio * stageWidth;
+      const py = item.y;
+
+      state.caughtTotal += 1;
+
+      if (isRightBucket) {
+        state.correctTotal += 1;
+        state.combo += 1;
+        if (state.combo > state.maxCombo) {
+          state.maxCombo = state.combo;
+        }
+
+        const mult = state.powerTimer > 0 ? 2 : 1;
+        const comboBonus = Math.min(state.combo - 1, 6) * 15;
+        const gained = (100 + comboBonus) * mult;
+        state.score += gained;
+
+        if (state.powerTimer <= 0) {
+          state.energy = Math.min(100, state.energy + 25);
+          if (state.energy >= 100) {
+            state.energy = 0;
+            state.powerTimer = 6.0;
+            soundEngine.powerActivate();
+            setEducationBanner(
+              '2倍分＆慢動作精準模式',
+              '能量全滿！6 秒內得分加倍且物品降速，把握機會精準分類！',
+              'good'
+            );
+          } else {
+            soundEngine.catchCorrect(state.combo);
+            setEducationBanner(
+              `正確 · ${BUCKETS[chosenBucketId].name}`,
+              item.reason,
+              'good'
+            );
+          }
+        } else {
+          soundEngine.catchCorrect(state.combo);
+          setEducationBanner(
+            `2倍分中 · ${BUCKETS[chosenBucketId].name}`,
+            item.reason,
+            'good'
+          );
+        }
+
+        addParticles(px, py, BUCKETS[chosenBucketId].border, 13);
+        addPopup(px, py - 18, `+${gained}${mult > 1 ? ' ×2!' : ''}`, BUCKETS[chosenBucketId].accent);
+      } else {
+        state.combo = 0;
+        state.lives = Math.max(0, state.lives - 1);
+        soundEngine.wrongOrMiss();
+        addParticles(px, py, '#EF4444', 12);
+        addPopup(px, py - 18, '放錯桶了！-1 ❤️', '#DC2626');
+        setEducationBanner(
+          `應選「${BUCKETS[item.answer].name}」`,
+          `${item.name}（你放進${BUCKETS[chosenBucketId].name}）：${item.reason}`,
+          'warn'
+        );
+      }
+
+      updateHud();
+    }
+
+    function handleMissItem(item) {
+      state.combo = 0;
+      state.lives = Math.max(0, state.lives - 1);
+      soundEngine.wrongOrMiss();
+      addParticles(item.xRatio * stageWidth, stageHeight - 24, '#F59E0B', 10);
+      addPopup(item.xRatio * stageWidth, stageHeight - 54, '漏接了！-1 ❤️', '#D97706');
+      setEducationBanner(
+        `漏接 · 正確為「${BUCKETS[item.answer].name}」`,
+        `${item.name}：${item.reason}`,
+        'warn'
+      );
+      updateHud();
+    }
+
+    function updateSimulation(dt) {
+      const diff = getDiffConfig();
+      const stage = getStageConfig();
+      const buckets = getStageBuckets();
+
+      if (state.powerTimer > 0) {
+        state.powerTimer = Math.max(0, state.powerTimer - dt);
+      }
+      if (state.dashTimer > 0) {
+        state.dashTimer = Math.max(0, state.dashTimer - dt);
+      }
+      if (state.dashCooldown > 0) {
+        state.dashCooldown = Math.max(0, state.dashCooldown - dt);
+      }
+
+      // 鍵盤左右移動
+      const moveSpeed = state.dashTimer > 0 ? 1.4 : 0.9;
+      if (state.keys.left) {
+        moveBasketToRatio(state.basketX - moveSpeed * dt);
+      }
+      if (state.keys.right) {
+        moveBasketToRatio(state.basketX + moveSpeed * dt);
+      }
+
+      // 生成掉落物
+      if (state.spawnedCount < stage.quota) {
+        state.spawnTimer -= dt;
+        if (state.spawnTimer <= 0) {
+          spawnItem();
+          state.spawnTimer = diff.spawnInterval;
+        }
+      }
+
+      const slowMultiplier = state.powerTimer > 0 ? 0.62 : 1.0;
+      const touchBoost = isTouchOrTabletViewport();
+      const bucketY = stageHeight - (touchBoost ? 74 : 70);
+      const bucketWidth = Math.max(
+        touchBoost ? 108 : 96,
+        Math.min(156, stageWidth / (buckets.length * 1.05))
+      );
+      // 平板與觸控裝置放大水平與垂直接取感應區
+      const catchHalfW = bucketWidth * (touchBoost ? 0.66 : 0.56) + (state.dashTimer > 0 ? 32 : 0);
+      const catchHalfH = touchBoost ? 38 : 30;
+      const magnetRadius = state.dashTimer > 0 ? 145 : 0;
+
+      const idxNow = Math.min(
+        buckets.length - 1,
+        Math.max(0, Math.floor(state.basketX * buckets.length))
+      );
+      if (idxNow !== state.activeBucketIdx) {
+        state.activeBucketIdx = idxNow;
+        highlightActiveBucketButton();
+      }
+
+      const nextItems = [];
+      for (const item of state.fallingItems) {
+        item.age += dt;
+        item.y += diff.fallSpeed * slowMultiplier * dt;
+
+        const sway = Math.sin(item.age * item.swayFreq + item.swayPhase) * item.swayAmp;
+        item.xRatio = Math.max(0.08, Math.min(0.92, item.anchor + sway));
+
+        // 吸物衝刺磁力輔助
+        if (magnetRadius > 0 && item.y > bucketY - 180 && item.y < bucketY + 30) {
+          const ix = item.xRatio * stageWidth;
+          const bx = state.basketX * stageWidth;
+          const dx = bx - ix;
+          const dy = bucketY - item.y;
+          if (Math.hypot(dx, dy) < magnetRadius) {
+            item.xRatio = Math.max(
+              0.08,
+              Math.min(0.92, item.xRatio + (dx / stageWidth) * 4.8 * dt)
+            );
+          }
+        }
+
+        const ix = item.xRatio * stageWidth;
+        const bx = state.basketX * stageWidth;
+        const hitX = Math.abs(ix - bx) <= catchHalfW;
+        const hitY = Math.abs(item.y - bucketY) <= catchHalfH;
+
+        if (hitX && hitY) {
+          handleCatchItem(item, buckets[idxNow]);
+        } else if (item.y - 32 > stageHeight - 12) {
+          handleMissItem(item);
+        } else {
+          nextItems.push(item);
+        }
+      }
+      state.fallingItems = nextItems;
+
+      state.particles = state.particles
+        .map((p) => ({
+          ...p,
+          x: p.x + p.vx * dt,
+          y: p.y + p.vy * dt,
+          vy: p.vy + 270 * dt,
+          life: p.life - dt,
+        }))
+        .filter((p) => p.life > 0);
+
+      state.popups = state.popups
+        .map((pop) => ({
+          ...pop,
+          y: pop.y + pop.vy * dt,
+          life: pop.life - dt,
+        }))
+        .filter((pop) => pop.life > 0);
+
+      updateHud();
+    }
+
+    // -------------------------------------------------------------------------
+    // 8. Canvas 繪製函式
+    // -------------------------------------------------------------------------
+    function roundRectPath(c, x, y, w, h, r) {
+      const radius = Math.min(r, w / 2, h / 2);
+      c.beginPath();
+      c.moveTo(x + radius, y);
+      c.arcTo(x + w, y, x + w, y + h, radius);
+      c.arcTo(x + w, y + h, x, y + h, radius);
+      c.arcTo(x, y + h, x, y, radius);
+      c.arcTo(x, y, x + w, y, radius);
+      c.closePath();
+    }
+
+    function drawStage() {
+      if (!ctx) return;
+      const w = stageWidth;
+      const h = stageHeight;
+      const buckets = getStageBuckets();
+      const stage = getStageConfig();
+      const touchBoost = isTouchOrTabletViewport();
+
+      // 背景漸層（超能模式時呈現暖陽金＋薄荷綠）
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      if (state.powerTimer > 0) {
+        grad.addColorStop(0, '#FEF9C3');
+        grad.addColorStop(0.55, '#ECFDF5');
+        grad.addColorStop(1, '#DCFCE7');
+      } else {
+        grad.addColorStop(0, '#FCFBF7');
+        grad.addColorStop(0.65, '#F2FAF4');
+        grad.addColorStop(1, '#E3F5E8');
+      }
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // 左右快速移桶提示區（方便平板／觸控直接點按左側或右側）
+      if (touchBoost) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(22, 163, 74, 0.035)';
+        ctx.fillRect(0, 0, w * 0.22, h - 46);
+        ctx.fillRect(w * 0.78, 0, w * 0.22, h - 46);
+
+        ctx.fillStyle = 'rgba(20, 41, 30, 0.32)';
+        ctx.font = '800 11px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('◀ 點左側移桶', w * 0.11, 24);
+        ctx.fillText('點右側移桶 ▶', w * 0.89, 24);
+        ctx.restore();
+      }
+
+      // 底部各分類桶軌道與底座
+      const laneW = w / buckets.length;
+      const baseTop = h - 44;
+      const activeIdx = Math.min(
+        buckets.length - 1,
+        Math.max(0, Math.floor(state.basketX * buckets.length))
+      );
+
+      for (let i = 0; i < buckets.length; i += 1) {
+        const b = BUCKETS[buckets[i]];
+        const lx = i * laneW;
+        const isCurrent = i === activeIdx;
+
+        ctx.save();
+        ctx.strokeStyle = isCurrent ? b.border : 'rgba(20, 41, 30, 0.08)';
+        ctx.lineWidth = isCurrent ? 2 : 1;
+        ctx.setLineDash(isCurrent ? [] : [4, 6]);
+        ctx.beginPath();
+        ctx.moveTo(lx + laneW / 2, 36);
+        ctx.lineTo(lx + laneW / 2, baseTop);
+        ctx.stroke();
+        ctx.restore();
+
+        roundRectPath(ctx, lx + 5, baseTop, laneW - 10, 38, 12);
+        ctx.fillStyle = isCurrent ? b.fill : '#FFFFFF';
+        ctx.fill();
+        ctx.lineWidth = isCurrent ? 2.5 : 1.2;
+        ctx.strokeStyle = isCurrent ? b.accent : '#CBD5E1';
+        ctx.stroke();
+
+        ctx.save();
+        ctx.fillStyle = b.text;
+        ctx.font = '800 12px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const shortLabel = laneW < 115 ? `${b.icon} ${b.name.slice(0, 2)}` : `${b.icon} ${b.name}`;
+        ctx.fillText(shortLabel, lx + laneW / 2, baseTop + 19);
+        ctx.restore();
+      }
+
+      // 關卡進度提示（左上或中上精簡顯示）
+      const remaining = Math.max(0, stage.quota - (state.spawnedCount - state.fallingItems.length));
+      ctx.save();
+      ctx.fillStyle = 'rgba(20, 41, 30, 0.58)';
+      ctx.font = '800 11px "Noto Sans TC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(
+        state.powerTimer > 0
+          ? `⚡ 2倍分＆慢動作剩餘 ${state.powerTimer.toFixed(1)}s · 剩餘 ${remaining} 件`
+          : `剩餘物品：${remaining} 件`,
+        w / 2,
+        22
+      );
+      ctx.restore();
+
+      // 繪製掉落物品
+      const cardW = Math.max(touchBoost ? 104 : 94, Math.min(130, w * 0.16));
+      const cardH = touchBoost ? 72 : 66;
+
+      for (const item of state.fallingItems) {
+        const ix = item.xRatio * w;
+        const iy = item.y;
+        const targetBucket = BUCKETS[item.answer];
+
+        ctx.save();
+        ctx.translate(ix, iy);
+        roundRectPath(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 16);
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fill();
+        ctx.lineWidth = 2.2;
+        ctx.strokeStyle = targetBucket ? targetBucket.border : '#94A3B8';
+        ctx.stroke();
+
+        ctx.font = touchBoost ? '26px "Noto Sans TC", sans-serif' : '24px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(item.icon, 0, -12);
+
+        ctx.fillStyle = '#14291E';
+        ctx.font = '800 12px "Noto Sans TC", sans-serif';
+        ctx.fillText(item.name, 0, 10);
+
+        ctx.fillStyle = '#64748B';
+        ctx.font = '700 10px "Noto Sans TC", sans-serif';
+        ctx.fillText(item.badge, 0, 24);
+        ctx.restore();
+      }
+
+      // 繪製可滑動分類接物桶
+      const activeBucket = BUCKETS[buckets[activeIdx]];
+      const bx = state.basketX * w;
+      const by = h - (touchBoost ? 74 : 70);
+      const basketW = Math.max(
+        touchBoost ? 108 : 96,
+        Math.min(156, w / (buckets.length * 1.05))
+      );
+      const basketH = touchBoost ? 44 : 38;
+
+      ctx.save();
+      if (state.dashTimer > 0) {
+        ctx.strokeStyle = 'rgba(22, 163, 74, 0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(bx, by, basketW * 0.56, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      roundRectPath(ctx, bx - basketW / 2, by - basketH / 2, basketW, basketH, 14);
+      ctx.fillStyle = activeBucket.fill;
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = activeBucket.accent;
+      ctx.stroke();
+
+      ctx.fillStyle = activeBucket.text;
+      ctx.font = '900 12px "Noto Sans TC", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(`${activeBucket.icon} ${activeBucket.name}`, bx, by);
+      ctx.restore();
+
+      // 繪製粒子與浮動得分提示
+      for (const p of state.particles) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      for (const pop of state.popups) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, pop.life / pop.maxLife);
+        ctx.fillStyle = pop.color;
+        ctx.font = '900 14px "Noto Sans TC", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(pop.text, pop.x, pop.y);
+        ctx.restore();
+      }
+    }
+
+    // -------------------------------------------------------------------------
+    // 9. 主迴圈與關卡結算顯示
+    // -------------------------------------------------------------------------
+    function startLoop() {
+      stopLoop();
+      state.lastTime = performance.now();
+
+      const step = (now) => {
+        if (state.phase !== 'playing') return;
+        const dt = Math.min((now - state.lastTime) / 1000, 0.05);
+        state.lastTime = now;
+
+        updateSimulation(dt);
+        drawStage();
+
+        const stage = getStageConfig();
+        const finishedAllItems = state.spawnedCount >= stage.quota && state.fallingItems.length === 0;
+        if (state.lives <= 0 || finishedAllItems) {
+          openStageSummary();
+          return;
+        }
+
+        state.rafId = requestAnimationFrame(step);
+      };
+
+      state.rafId = requestAnimationFrame(step);
+    }
+
+    function stopLoop() {
+      if (state.rafId !== null) {
+        cancelAnimationFrame(state.rafId);
+        state.rafId = null;
+      }
+    }
+
+    function openStageSummary() {
+      stopLoop();
+      state.phase = 'summary';
+
+      const diff = getDiffConfig();
+      const stage = getStageConfig();
+      const passed = state.score >= stage.targetScore && state.lives > 0;
+      const hasNext = state.stageIndex + 1 < diff.stages.length;
+
+      soundEngine.stageComplete(passed);
+
+      document.getElementById('summaryStatusTag').textContent =
+        `${diff.label}難度 · 第 ${state.stageIndex + 1} / ${diff.stages.length} 關`;
+      document.getElementById('summaryTitle').textContent = passed
+        ? `🎉 「${stage.title}」關卡達成！`
+        : `💪 「${stage.title}」差一點達標`;
+      document.getElementById('summarySubtitle').textContent =
+        `本關目標 ${stage.targetScore} 分 · 目前累積 ${state.score} 分`;
+
+      document.getElementById('summaryScore').textContent = `${state.score}`;
+      document.getElementById('summaryAccuracy').textContent = `${state.correctTotal}/${state.caughtTotal}`;
+      document.getElementById('summaryCombo').textContent = `${state.maxCombo}`;
+
+      const listEl = document.getElementById('summaryTakeaways');
+      listEl.innerHTML = stage.takeaways
+        .map((t) => `<li class="flex items-start gap-2"><span class="font-black text-emerald-700">•</span><span>${t}</span></li>`)
+        .join('');
+
+      const nextBtn = document.getElementById('nextStageBtn');
+      nextBtn.textContent = hasNext ? '下一關 →' : '重新從第 1 關挑戰';
+
+      document.getElementById('stageSummaryOverlay').classList.remove('hidden');
+    }
+
+    // -------------------------------------------------------------------------
+    // 10. UI 同步與高 DPI Canvas 尺寸調整
+    // -------------------------------------------------------------------------
+    function syncDifficultyButtons() {
+      document.getElementById('stageIndicatorText').textContent =
+        `第 ${state.stageIndex + 1} / ${getDiffConfig().stages.length} 關 · ${getStageConfig().title}（共 9 關）`;
+
+      document.querySelectorAll('.diff-btn').forEach((btn) => {
+        const isSelected = btn.dataset.diff === state.difficulty;
+        btn.className = isSelected
+          ? 'diff-btn px-2.5 py-1 rounded-xl text-xs font-extrabold bg-emerald-600 text-white shadow-2xs transition cursor-pointer'
+          : 'diff-btn px-2.5 py-1 rounded-xl text-xs font-extrabold text-forestInk/75 hover:text-forestInk transition cursor-pointer';
+      });
+    }
+
+    function renderBucketButtons() {
+      const buckets = getStageBuckets();
+      const bar = document.getElementById('bucketButtonsBar');
+      bar.className =
+        buckets.length === 3
+          ? 'grid grid-cols-3 gap-2'
+          : 'grid grid-cols-2 sm:grid-cols-4 gap-2';
+
+      bar.innerHTML = buckets
+        .map((bId, idx) => {
+          const b = BUCKETS[bId];
+          const active = idx === state.activeBucketIdx;
+          return `
+            <button
+              type="button"
+              data-bucket-idx="${idx}"
+              class="bucket-pick-btn rounded-2xl border px-3 py-2.5 text-left transition cursor-pointer flex items-center justify-between gap-2 ${
+                active ? b.activeBtnClass : b.btnClass
+              }"
+            >
+              <div class="min-w-0">
+                <div class="text-xs sm:text-sm font-black truncate">${b.icon} ${b.name}</div>
+                <div class="text-[11px] font-bold opacity-75 truncate">${b.tip}</div>
+              </div>
+              <span class="text-xs font-black opacity-60 shrink-0">${idx + 1}</span>
+            </button>
+          `;
+        })
+        .join('');
+
+      bar.querySelectorAll('.bucket-pick-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.bucketIdx);
+          selectBucketByIndex(idx);
+        });
+      });
+    }
+
+    function highlightActiveBucketButton() {
+      const buckets = getStageBuckets();
+      document.querySelectorAll('.bucket-pick-btn').forEach((btn) => {
+        const idx = Number(btn.dataset.bucketIdx);
+        const b = BUCKETS[buckets[idx]];
+        if (!b) return;
+        const active = idx === state.activeBucketIdx;
+        btn.className = `bucket-pick-btn rounded-2xl border px-3 py-2.5 text-left transition cursor-pointer flex items-center justify-between gap-2 ${
+          active ? b.activeBtnClass : b.btnClass
+        }`;
+      });
+    }
+
+    function updateHud() {
+      const stage = getStageConfig();
+      document.getElementById('hudScore').textContent = `${state.score} / ${stage.targetScore}`;
+      document.getElementById('hudCombo').textContent = `${state.combo} 🔥`;
+
+      const energyBar = document.getElementById('hudEnergyBar');
+      const energyPct = document.getElementById('hudEnergyPct');
+      const energyLabel = document.getElementById('hudEnergyLabel');
+
+      if (state.powerTimer > 0) {
+        const pct = Math.max(0, Math.min(100, (state.powerTimer / 6.0) * 100));
+        energyLabel.textContent = '2倍分＆慢動作';
+        energyPct.textContent = `${state.powerTimer.toFixed(1)}s`;
+        energyBar.style.width = `${pct}%`;
+        energyBar.className = 'h-full rounded-full bg-amber-500 transition-all duration-100';
+      } else {
+        energyLabel.textContent = '守衛能量';
+        energyPct.textContent = `${state.energy}%`;
+        energyBar.style.width = `${state.energy}%`;
+        energyBar.className = 'h-full rounded-full bg-emerald-600 transition-all duration-150';
+      }
+
+      document.getElementById('hudLives').textContent =
+        '❤️'.repeat(state.lives) + '🤍'.repeat(Math.max(0, state.maxLives - state.lives));
+
+      const dashBtn = document.getElementById('dashActionBtn');
+      if (state.dashTimer > 0) {
+        dashBtn.textContent = '⚡ 衝刺中';
+        dashBtn.disabled = true;
+      } else if (state.dashCooldown > 0) {
+        dashBtn.textContent = `⚡ 冷卻 ${state.dashCooldown.toFixed(1)}s`;
+        dashBtn.disabled = true;
+      } else {
+        dashBtn.textContent = '⚡ 吸物衝刺';
+        dashBtn.disabled = false;
+      }
+    }
+
+    function resizeCanvas() {
+      if (!canvas || !ctx) return;
+      const wrapper = canvas.parentElement;
+      if (!wrapper) return;
+
+      const rect = wrapper.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      stageWidth = Math.max(300, Math.floor(rect.width));
+      const targetH = Math.max(360, Math.min(500, Math.floor(window.innerHeight * 0.56)));
+      stageHeight = targetH;
+
+      wrapper.style.height = `${stageHeight}px`;
+      canvas.width = Math.floor(stageWidth * dpr);
+      canvas.height = Math.floor(stageHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      drawStage();
+    }
+
+    // -------------------------------------------------------------------------
+    // 11. GitHub Pages 說明彈窗與 README 範本
+    // -------------------------------------------------------------------------
+    function buildReadmeText() {
+      return `# ♻️ 垃圾分類守衛隊：滑動接球大作戰
+
+一款適合部署在 **GitHub Pages** 的繁體中文單檔 HTML5 Canvas 環保分類街機教學遊戲（\`index.html\`）。
+
+## 遊戲特色
+- **三種難度 × 共 9 關關卡**：提供「簡單」、「普通」、「困難」三種難度，每難度包含「日常餐飲」、「居家包裝」、「常見陷阱」3 關，涵蓋油漬披薩盒、保麗龍、廢電池、日光燈管、塑膠吸管、大骨頭等常見分類題目。
+- **平板與多裝置操作最佳化**：支援滑鼠／手指拖曳接物桶、點選下方分類桶切換、點畫布左右側快速移桶，以及鍵盤左右方向鍵／A／D 與空白鍵「⚡ 吸物衝刺」。
+- **連擊 Combo 與守衛能量**：連續正確接取累積連擊與能量，能量達 100% 啟動「2倍分＆慢動作精準模式」；每次接錯或漏接皆會顯示即時一句分類解析與關卡重點筆記。
+- **合成音效與一鍵靜音**：內建 Web Audio 合成音效與靜音開關，無需外部音檔。
+
+## 如何部署到 GitHub Pages
+1. 將 \`index.html\` 與 \`README.md\` 上傳至 GitHub Repository 的根目錄。
+2. 開啟 Repository 的 **Settings > Pages**。
+3. 在 **Branch** 選擇 \`main\` 分支與 \`/ (root)\` 資料夾，按下 **Save**。
+4. 等待約 1 分鐘即可透過 GitHub Pages 網址直接開始遊玩。`;
+    }
+
+    function openGithubModal() {
+      document.getElementById('readmeTemplateBox').value = buildReadmeText();
+      document.getElementById('copyStatusText').textContent = '';
+      const modal = document.getElementById('githubModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeGithubModal() {
+      const modal = document.getElementById('githubModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    // -------------------------------------------------------------------------
+    // 12. 事件綁定與初始化
+    // -------------------------------------------------------------------------
+    function bindEvents() {
+      document.querySelectorAll('.diff-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          soundEngine.unlock();
+          startStage(btn.dataset.diff, 0);
+        });
+      });
+
+      document.getElementById('muteBtn').addEventListener('click', () => {
+        soundEngine.muted = !soundEngine.muted;
+        const btn = document.getElementById('muteBtn');
+        btn.textContent = soundEngine.muted ? '🔇 已靜音' : '🔊 音效開';
+        if (!soundEngine.muted) {
+          soundEngine.bucketSwitch();
+        }
+      });
+
+      document.getElementById('githubBtn').addEventListener('click', openGithubModal);
+      document.getElementById('closeGithubBtn').addEventListener('click', closeGithubModal);
+      document.getElementById('githubModal').addEventListener('click', (e) => {
+        if (e.target.id === 'githubModal') closeGithubModal();
+      });
+
+      document.getElementById('copyReadmeBtn').addEventListener('click', () => {
+        const box = document.getElementById('readmeTemplateBox');
+        box.select();
+        box.setSelectionRange(0, box.value.length);
+        try {
+          document.execCommand('copy');
+          document.getElementById('copyStatusText').textContent = '✓ 已複製 README.md 範本';
+        } catch (err) {
+          document.getElementById('copyStatusText').textContent = '請手動全選複製上方內容';
+        }
+      });
+
+      document.getElementById('dashActionBtn').addEventListener('click', () => {
+        soundEngine.unlock();
+        triggerDash();
+      });
+
+      document.getElementById('replayStageBtn').addEventListener('click', () => {
+        startStage(state.difficulty, state.stageIndex);
+      });
+
+      document.getElementById('switchDiffBtn').addEventListener('click', () => {
+        const order = ['easy', 'normal', 'hard'];
+        const nextDiff = order[(order.indexOf(state.difficulty) + 1) % order.length];
+        startStage(nextDiff, 0);
+      });
+
+      document.getElementById('nextStageBtn').addEventListener('click', () => {
+        const total = getDiffConfig().stages.length;
+        const nextIdx = state.stageIndex + 1 < total ? state.stageIndex + 1 : 0;
+        startStage(state.difficulty, nextIdx);
+      });
+
+      // Canvas 指標拖曳與點按左右側快速移桶
+      canvas.addEventListener('pointerdown', (e) => {
+        if (state.phase !== 'playing') return;
+        soundEngine.unlock();
+        state.isDragging = true;
+        if (canvas.setPointerCapture) {
+          try {
+            canvas.setPointerCapture(e.pointerId);
+          } catch (err) {
+            // 忽略部分裝置例外
+          }
+        }
+
+        const rect = canvas.getBoundingClientRect();
+        const relX = (e.clientX - rect.left) / Math.max(1, rect.width);
+
+        // 點按畫布左側 22% 或右側 22% 時快速向該側移桶，其餘位置直接跟隨
+        if (relX < 0.22) {
+          moveBasketToRatio(state.basketX - 0.22);
+        } else if (relX > 0.78) {
+          moveBasketToRatio(state.basketX + 0.22);
+        } else {
+          moveBasketToRatio(relX);
+        }
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        if (!state.isDragging || state.phase !== 'playing') return;
+        const rect = canvas.getBoundingClientRect();
+        const relX = (e.clientX - rect.left) / Math.max(1, rect.width);
+        moveBasketToRatio(relX);
+      });
+
+      const endPointerDrag = (e) => {
+        state.isDragging = false;
+        if (canvas.releasePointerCapture && e.pointerId !== undefined) {
+          try {
+            if (canvas.hasPointerCapture(e.pointerId)) {
+              canvas.releasePointerCapture(e.pointerId);
+            }
+          } catch (err) {
+            // 忽略
+          }
+        }
+      };
+
+      canvas.addEventListener('pointerup', endPointerDrag);
+      canvas.addEventListener('pointercancel', endPointerDrag);
+
+      // 鍵盤操作（左右方向鍵 / A / D 移動，1~4 快速切換分類桶，空白鍵吸物衝刺）
+      window.addEventListener('keydown', (e) => {
+        if (state.phase !== 'playing') return;
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          state.keys.left = true;
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          state.keys.right = true;
+        } else if (e.key === ' ') {
+          e.preventDefault();
+          triggerDash();
+        } else if (['1', '2', '3', '4'].includes(e.key)) {
+          const idx = Number(e.key) - 1;
+          if (idx < getStageBuckets().length) {
+            selectBucketByIndex(idx);
+          }
+        }
+      });
+
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+          state.keys.left = false;
+        } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+          state.keys.right = false;
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        resizeCanvas();
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      canvas = document.getElementById('gameCanvas');
+      ctx = canvas.getContext('2d');
+      bindEvents();
+      startStage('easy', 0);
+    });
+  </script>
+</body>
+</html>
